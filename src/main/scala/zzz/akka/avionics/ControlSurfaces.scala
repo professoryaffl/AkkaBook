@@ -8,8 +8,8 @@ object ControlSurfaces{
 }
 
 class ControlSurfaces(altimeter: ActorRef) extends Actor{
-  import ControlSurfaces._
-  import Altimeter._
+  import zzz.akka.avionics.Altimeter._
+  import zzz.akka.avionics.ControlSurfaces._
 
 
   def receive = {

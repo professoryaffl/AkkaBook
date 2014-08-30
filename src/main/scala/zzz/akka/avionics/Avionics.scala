@@ -1,12 +1,12 @@
 package zzz.akka.avionics
 
-import akka.actor.{Props,  ActorRef,  ActorSystem}
+import akka.actor.{ActorRef, ActorSystem, Props}
 import akka.pattern.ask
-
 import akka.util.Timeout
-import scala.concurrent.duration._
+
 import scala.concurrent.Await
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration._
 
 object Avionics {
   implicit val timeout =  Timeout(5.seconds)
