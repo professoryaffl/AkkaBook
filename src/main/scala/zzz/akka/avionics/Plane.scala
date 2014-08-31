@@ -10,6 +10,7 @@ import akka.pattern.ask
 
 object Plane{
   case object GiveMeControl
+  case object LostControl
   case object RequestCopilot
   case class Controls(controls: ActorRef)
   case class CopilotReference(controls: ActorRef)
@@ -20,14 +21,11 @@ object Plane{
 class Plane extends Actor with ActorLogging{
   this: PilotProvider with AltimeterProvider with LeadFlightAttendantProvider =>
 
+  import Altimeter.AltitudeUpdate
+  import Plane._
+  import Pilots._
 
-  import zzz.akka.avionics.Altimeter.AltitudeUpdate
-  import zzz.akka.avionics.EventSource.RegisterListener
-  import zzz.akka.avionics.Plane._
 
-
-  val altimeter = context.actorOf(Props(Altimeter()), "Altimeter")
-  val controls = context.actorOf(Props(new ControlSurfaces(altimeter)), "ControlSurfaces")
   val cfgstr = "zzz.akka.avionics.flightcrew"
   val config = context.system.settings.config
   val pilotName = config.getString(s"$cfgstr.pilotName")
@@ -52,9 +50,11 @@ class Plane extends Actor with ActorLogging{
       sender ! CopilotReference(actorForPilots(copilotName))
     case GiveMeControl =>
       log info("Plane giving control")
-      sender ! Controls(controls)
+      sender ! Controls(actorForControls("ControlSurfaces"))
     case AltitudeUpdate(alt) =>
       println(s"Altitude is now $alt")
+    case LostControl =>
+      actorForControls("Autopilot") ! TakeControl
   }
 
   implicit val askTimeout = Timeout(1.second)
@@ -63,8 +63,9 @@ class Plane extends Actor with ActorLogging{
       Props(new IsolatedResumeSupervisor with OneForOneStrategyFactory {
         override def childStarter(): Unit = {
           val alt = context.actorOf(Props(newAltimeter), "Altimeter")
+          val heading = context.actorOf(Props(HeadingIndicator()), "HeadingIndicator")
           context.actorOf(Props(newAutopilot(self)), "Autopilot")
-          context.actorOf(Props(new ControlSurfaces(alt)), "ControlSurfaces")
+          context.actorOf(Props(new ControlSurfaces(self, alt, heading)), "ControlSurfaces")
         }
       }), "Equipment"
     )
@@ -75,13 +76,13 @@ class Plane extends Actor with ActorLogging{
 
   def startPeople(): Unit = {
     val plane = self
-    val controls = actorForControls("ControlSurfaces")
     val autopilot = actorForControls("Autopilot")
     val altimeter = actorForControls("Altimeter")
+    val heading = actorForControls("HeadingIndicator")
     val people = context.actorOf(
       Props(new IsolatedStopSupervisor with OneForOneStrategyFactory {
         override def childStarter(): Unit = {
-          context.actorOf(Props(newPilot(plane, autopilot, controls, altimeter)), pilotName)
+          context.actorOf(Props(newPilot(plane, autopilot, heading, altimeter)), pilotName)
           context.actorOf(Props(newCopilot(plane, autopilot, altimeter)), copilotName)
         }
       }), "Pilots"

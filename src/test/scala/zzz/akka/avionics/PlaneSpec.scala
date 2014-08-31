@@ -9,12 +9,12 @@ class PlaneSpec extends TestKit(ActorSystem("PlaneSpec")) with WordSpecLike with
 
   import Plane._
 
-  val plane = TestActorRef[Plane]
+  val plane = TestActorRef[Plane](Props(Plane()))
 
   "PlaneSpec" should {
     "Give control" in {
       plane ! GiveMeControl
-      expectMsg(Controls(plane.underlyingActor.controls))
+      expectMsg(Controls(plane.underlyingActor.actorForControls("ControlSurfaces")))
     }
   }
 

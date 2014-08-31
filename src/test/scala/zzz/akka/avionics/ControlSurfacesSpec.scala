@@ -9,7 +9,7 @@ class ControlSurfacesSpec extends TestKit(ActorSystem("ControlSurfacesSpec")) wi
   import ControlSurfaces._
   import Altimeter._
 
-  val controlSurface = TestActorRef[ControlSurfaces](Props(new ControlSurfaces(testActor)))
+  val controlSurface = TestActorRef[ControlSurfaces](Props(new ControlSurfaces(testActor,testActor,testActor)))
 
   "ControlSurfaces" should {
     "respond to StickForward" in {
