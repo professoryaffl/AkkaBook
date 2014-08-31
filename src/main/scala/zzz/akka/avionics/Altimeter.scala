@@ -43,3 +43,6 @@ class Altimeter extends Actor with ActorLogging {
   override def postStop(): Unit = ticker.cancel
 }
 
+trait AltimeterProvider {
+  def newAltimeter: Actor = Altimeter()
+}

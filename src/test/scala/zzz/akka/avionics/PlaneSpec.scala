@@ -14,7 +14,7 @@ class PlaneSpec extends TestKit(ActorSystem("PlaneSpec")) with WordSpecLike with
   "PlaneSpec" should {
     "Give control" in {
       plane ! GiveMeControl
-      expectMsg(plane.underlyingActor.controls)
+      expectMsg(Controls(plane.underlyingActor.controls))
     }
   }
 
