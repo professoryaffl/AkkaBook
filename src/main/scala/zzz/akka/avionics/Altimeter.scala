@@ -9,14 +9,20 @@ import scala.concurrent.duration._
 object Altimeter{
   case class RateChange(amount: Float)
   case class AltitudeUpdate(altitude: Double)
+  case object GetCurrentAltitude
+
+  case class CurrentAltitude(altitude: Double)
 
   def apply() = new Altimeter with ProductionEventSource
 }
 
-class Altimeter extends Actor with ActorLogging {
+class Altimeter extends Actor with ActorLogging with StatusReporter {
   this: EventSource =>
 
   import zzz.akka.avionics.Altimeter._
+  import StatusReporter._
+
+  override def currentStatus: Status = StatusOK
 
   val ceiling = 43000
   val maxRateOfClimb = 5000
@@ -28,6 +34,8 @@ class Altimeter extends Actor with ActorLogging {
   case object Tick
 
   def altimeterReceive: Receive = {
+    case GetCurrentAltitude =>
+      sender ! CurrentAltitude(altitude)
     case RateChange(amount) =>
       rateOfClimb = amount.min(1.0f).max(-1.0f) * maxRateOfClimb
       log.info(s"Altimeter changed rate of climb to $rateOfClimb")
@@ -38,7 +46,7 @@ class Altimeter extends Actor with ActorLogging {
       sendEvent(AltitudeUpdate(altitude))
   }
 
-  def receive = eventSourceReceive orElse altimeterReceive
+  def receive = statusReceive orElse eventSourceReceive orElse altimeterReceive
 
   override def postStop(): Unit = ticker.cancel
 }

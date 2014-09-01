@@ -14,6 +14,7 @@ object Avionics {
   val plane  =  system.actorOf(Props[Plane],"Plane")
 
   def main(args: Array[String]){
+    system.actorOf(Props(new TelnetServer(plane)), "Telnet")
     val control = Await.result((plane ? Plane.GiveMeControl).mapTo[ActorRef], 5.seconds)
 
     system.scheduler.scheduleOnce(200.millis){control ! ControlSurfaces.StickBack(1f)}

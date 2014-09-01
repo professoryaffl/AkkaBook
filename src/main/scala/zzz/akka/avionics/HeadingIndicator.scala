@@ -1,16 +1,20 @@
 package zzz.akka.avionics
 
 import akka.actor.{ActorLogging, Actor}
+import zzz.akka.avionics.StatusReporter.Status
 import scala.concurrent.duration._
 
 object HeadingIndicator {
   case class BankChange(amount: Float)
   case class HeadingUpdate(amount: Float)
+  case object GetCurrentHeading
+
+  case class CurrentHeading(heading: Float)
 
   def apply() = new HeadingIndicator with ProductionEventSource
 }
 
-trait HeadingIndicator extends Actor with ActorLogging {
+trait HeadingIndicator extends Actor with ActorLogging with StatusReporter {
   this: EventSource =>
 
   import HeadingIndicator._
@@ -27,7 +31,12 @@ trait HeadingIndicator extends Actor with ActorLogging {
   var rateOfBank = 0f
   var heading = 0f
 
+  import StatusReporter._
+  override def currentStatus: Status = StatusOK
+
   def headingIndicatorReceive: Receive = {
+    case GetCurrentHeading =>
+      sender ! CurrentHeading(heading)
     case BankChange(amount) =>
       rateOfBank = amount.min(1.0f).max(-1.0f)
     case Tick =>
@@ -39,7 +48,7 @@ trait HeadingIndicator extends Actor with ActorLogging {
       sendEvent(HeadingUpdate(heading))
   }
 
-  def receive = eventSourceReceive orElse headingIndicatorReceive
+  def receive = statusReceive orElse eventSourceReceive orElse headingIndicatorReceive
 
   override def postStop(): Unit = ticker.cancel
 }

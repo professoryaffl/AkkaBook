@@ -4,12 +4,14 @@ import akka.actor.{Actor, ActorLogging, ActorRef, Props}
 import akka.routing.FromConfig
 import akka.util.Timeout
 import zzz.akka.avionics.IsolatedLifeCycleSupervisor.WaitForStart
-import scala.concurrent.Await
+import zzz.akka.avionics.StatusReporter.ReportStatus
+import scala.concurrent.{Future, Await}
 import scala.concurrent.duration._
 import akka.pattern.ask
 
 
 object Plane{
+  case object GetAllInstrumentStatus
   case object GiveMeControl
   case object LostControl
   case object RequestCopilot
@@ -22,7 +24,8 @@ object Plane{
 class Plane extends Actor with ActorLogging{
   this: PilotProvider with AltimeterProvider with LeadFlightAttendantProvider =>
 
-  import Altimeter.AltitudeUpdate
+  import Altimeter._
+  import HeadingIndicator._
   import Plane._
   import Pilots._
 
@@ -46,7 +49,25 @@ class Plane extends Actor with ActorLogging{
     actorForPilots(copilotName) ! ReadyToGo
   }
 
+  val instruments = Vector(actorForControls("Altimeter"), actorForControls("HeadingIndicator"))
+
+  implicit val ec = context.dispatcher
+
   def receive = {
+    case GetCurrentHeading =>
+      actorForControls("HeadingIndicator") forward GetCurrentHeading
+    case GetCurrentAltitude =>
+      actorForControls("Altimeter") forward GetCurrentAltitude
+    case GetAllInstrumentStatus =>
+      import StatusReporter._
+      import akka.pattern.pipe
+      val instrumentFutures = instruments map { i => (i ? ReportStatus).mapTo[Status] }
+      val f = Future.sequence(instrumentFutures)
+      f map { results =>
+        if (results.contains(StatusBAD)) StatusBAD
+        else if (results.contains(StatusNotGreat)) StatusNotGreat
+        else StatusOK
+      } pipeTo sender
     case RequestCopilot =>
       sender ! CopilotReference(actorForPilots(copilotName))
     case GiveMeControl =>
