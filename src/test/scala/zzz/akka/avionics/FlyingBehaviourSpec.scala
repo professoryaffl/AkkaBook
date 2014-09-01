@@ -1,6 +1,7 @@
 package zzz.akka.avionics
 
-import akka.actor.{Props, ActorRef, ActorSystem}
+import akka.actor.FSM.SubscribeTransitionCallBack
+import akka.actor.{Actor, Props, ActorRef, ActorSystem}
 import akka.testkit.{TestActorRef, TestProbe, TestFSMRef, TestKit}
 import org.scalatest.{Matchers, WordSpecLike}
 import zzz.akka.avionics.Altimeter.AltitudeUpdate
@@ -9,7 +10,16 @@ import zzz.akka.avionics.HeadingIndicator.HeadingUpdate
 import zzz.akka.avionics.Pilots.ReadyToGo
 
 
+object FlyingBehaviourSpec {
+  class ForwardingActor(testActor: ActorRef) extends Actor {
+    override def receive: Receive = {
+      case m => testActor forward m
+    }
+  }
+}
+
 class FlyingBehaviourSpec extends TestKit(ActorSystem("FlyingBehaviourSpec")) with WordSpecLike with Matchers {
+  import FlyingBehaviourSpec._
   import FlyingBehaviour._
   import Plane._
 
@@ -54,7 +64,7 @@ class FlyingBehaviourSpec extends TestKit(ActorSystem("FlyingBehaviourSpec")) wi
     }
   }
 
-  "transition to FLying state" should {
+  "transition to Flying state" should {
     "create adjust timer" in {
       val a = fsm()
       a.setState(PreparingToFly)
@@ -65,15 +75,19 @@ class FlyingBehaviourSpec extends TestKit(ActorSystem("FlyingBehaviourSpec")) wi
 
   "Pilot.becomeZaphod" should {
     "send new calculators" in {
-      val ref = TestActorRef[Pilot](Props(new Pilot(nilActor,nilActor,nilActor,nilActor) with FlyingProvider {
-        override def newFlyingBehaviour(plane: ActorRef, heading: ActorRef, altimeter: ActorRef) = test
-      }))
+      val slicedPilot = Props(new Pilot(nilActor,nilActor,nilActor,nilActor) with DrinkingProvider with FlyingProvider {
+        override def newFlyingBehaviour(plane: ActorRef, heading: ActorRef, altimeter: ActorRef): Props = Props(new ForwardingActor(testActor))
+      })
+      val ref = TestActorRef[Pilot](slicedPilot)
       ref ! ReadyToGo
       ref ! FeelingLikeZaphod
-      expectMsgAllOf(
-        NewElevatorCalculator(Pilot.zaphodCalcElevator),
-        NewBankCalculator(Pilot.zaphodCalcAilerons)
-      )
+      expectMsgAllClassOf(classOf[SubscribeTransitionCallBack], classOf[Fly], classOf[NewElevatorCalculator], classOf[NewBankCalculator]) foreach { m=>
+        m match {
+          case NewElevatorCalculator(f) => f should be (Pilot.zaphodCalcElevator)
+          case NewBankCalculator(f) => f should be (Pilot.zaphodCalcAilerons)
+          case _ =>
+        }
+      }
     }
   }
 

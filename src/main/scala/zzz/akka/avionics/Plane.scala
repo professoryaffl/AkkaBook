@@ -1,6 +1,7 @@
 package zzz.akka.avionics
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props}
+import akka.routing.FromConfig
 import akka.util.Timeout
 import zzz.akka.avionics.IsolatedLifeCycleSupervisor.WaitForStart
 import scala.concurrent.Await
@@ -79,7 +80,7 @@ class Plane extends Actor with ActorLogging{
     val autopilot = actorForControls("Autopilot")
     val altimeter = actorForControls("Altimeter")
     val heading = actorForControls("HeadingIndicator")
-    val people = context.actorOf(
+    val pilots = context.actorOf(
       Props(new IsolatedStopSupervisor with OneForOneStrategyFactory {
         override def childStarter(): Unit = {
           context.actorOf(Props(newPilot(plane, autopilot, heading, altimeter)), pilotName)
@@ -87,7 +88,15 @@ class Plane extends Actor with ActorLogging{
         }
       }), "Pilots"
     )
-    context.actorOf(Props(newLeadFlightAttendant), attendantName)
+    Await.result(pilots ? WaitForStart, 1.second)
+    val leadAttendant =
+      context.actorOf(Props(newLeadFlightAttendant).withRouter(FromConfig()), "FlightAttendantRouter")
+    val people =
+      context.actorOf(Props(new IsolatedStopSupervisor with OneForOneStrategyFactory {
+        def childStarter(): Unit = {
+          context.actorOf(Props(PassengerSupervisor(leadAttendant)), "Passengers")
+        }
+      }))
     Await.result(people ? WaitForStart, 1.second)
   }
 

@@ -5,6 +5,13 @@ import akka.actor.{Cancellable, ActorRef, Actor}
 import scala.util.Random
 import scala.concurrent.duration._
 
+trait FlightAttendantProvider {
+  def newFlightAttendant(): Actor =
+    new FlightAttendant with AttendantResponsiveness {
+      val maxResponseTimeMS = 300000
+    }
+}
+
 trait AttendantResponsiveness {
   val maxResponseTimeMS: Int
   def responseDuration = Random.nextInt(maxResponseTimeMS).millis
@@ -71,3 +78,4 @@ class FlightAttendant extends Actor {
 
   override def receive = assistInjuredPassenger orElse handleDrinkRequests
 }
+
